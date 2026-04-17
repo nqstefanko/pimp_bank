@@ -48,6 +48,9 @@ export default function QuestionsPage() {
   const [newAskedByRole, setNewAskedByRole] = useState<PersonRole | "">("");
   const [isSaving, setIsSaving] = useState(false);
 
+
+  const [revealedId, setRevealedId] = useState<number | null>(null);
+
   const [sortBy, setSortBy] = useState("most-asked");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [askedByFilter, setAskedByFilter] = useState("all");
@@ -739,14 +742,25 @@ export default function QuestionsPage() {
                         }`}
                       />
                     ) : (
-                      <div className="relative group min-h-[60px]">
-                        <div className="whitespace-normal break-words break-words leading-5 text-center blur-sm transition duration-200 group-hover:blur-none">
-                          {q.answer}
-                        </div>
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-zinc-500 group-hover:hidden">
-                          hover to reveal
-                        </div>
+                    <div className="relative min-h-[60px] text-center group">
+                      <div
+                        onClick={() =>
+                          setRevealedId((prev) => (prev === q.id ? null : q.id))
+                        }
+                        className={`
+                          whitespace-normal break-words leading-5 transition duration-200 cursor-pointer
+                          ${revealedId === q.id ? "" : "blur-sm hover:blur-none"}
+                        `}
+                      >
+                        {q.answer}
                       </div>
+
+                      {revealedId !== q.id && (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-zinc-500 group-hover:hidden">
+                          hover/tap to reveal
+                        </div>
+                      )}
+                    </div>
                     )}
                   </td>
 
