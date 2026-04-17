@@ -2,25 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 
-type RouteContext = {
-  params: Promise<{ id: string }>;
-};
-
-export async function DELETE(_: Request, context: RouteContext) {
-  const { id } = await context.params;
-  const questionId = Number(id);
-
-  if (Number.isNaN(questionId)) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  }
-
-  await prisma.question.delete({
-    where: { id: questionId },
-  });
-
-  return NextResponse.json({ success: true });
-}
-
 export async function GET() {
   const questions = await prisma.question.findMany({
     include: { askedBy: true },

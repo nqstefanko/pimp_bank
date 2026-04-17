@@ -5,7 +5,7 @@ type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
-export async function DELETE(_: Request, context: RouteContext) {
+export async function DELETE(_request: Request, context: RouteContext) {
   const { id } = await context.params;
   const questionId = Number(id);
 
@@ -41,7 +41,10 @@ export async function PATCH(request: Request, context: RouteContext) {
 
   if (!service || !question || !answer || !askedByName || !askedByRole) {
     return NextResponse.json(
-      { error: "Service, question, answer, askedByName, and askedByRole are required" },
+      {
+        error:
+          "Service, question, answer, askedByName, and askedByRole are required",
+      },
       { status: 400 }
     );
   }
