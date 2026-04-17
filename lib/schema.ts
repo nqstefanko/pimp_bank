@@ -35,7 +35,27 @@ export const SCHEMA = {
       subspecialty: [], // probably none for now
     },
 
+    "Psychiatry": {
+      services: [],
+      subspecialty: [], // probably none for now
+    },
+    
     "Neurology": {
+      services: [],
+      subspecialty: [], // probably none for now
+    },
+    
+    "Family": {
+      services: [],
+      subspecialty: [], // probably none for now
+    },
+
+    "Interal Medicine": {
+      services: [],
+      subspecialty: [], // probably none for now
+    },
+
+    "OB/GYN": {
       services: [],
       subspecialty: [], // probably none for now
     },
