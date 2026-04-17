@@ -23,7 +23,8 @@ export async function DELETE(_: Request, context: RouteContext) {
 
 export async function GET() {
   const questions = await prisma.question.findMany({
-    orderBy: { id: "asc" },
+    include: { askedBy: true },
+    orderBy: { createdAt: "desc" },
   });
 
   return NextResponse.json(questions);
@@ -32,21 +33,58 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json();
 
-  const { rotation, subspecialty, question, answer } = body;
+  const {
+    rotation,
+    service,
+    subspecialty,
+    question,
+    answer,
+    askedByName,
+    askedByRole,
+  } = body;
 
-  if (!rotation || !subspecialty || !question || !answer) {
+  if (
+    !rotation ||
+    !service ||
+    !question ||
+    !answer ||
+    !askedByName ||
+    !askedByRole
+  ) {
     return NextResponse.json(
-      { error: "All fields are required" },
+      {
+        error:
+          "Rotation, service, question, answer, askedByName, and askedByRole are required",
+      },
       { status: 400 }
     );
   }
 
+  const person = await prisma.person.upsert({
+    where: {
+      nameRole: {
+        name: askedByName.trim(),
+        role: askedByRole,
+      },
+    },
+    update: {},
+    create: {
+      name: askedByName.trim(),
+      role: askedByRole,
+    },
+  });
+
   const newQuestion = await prisma.question.create({
     data: {
       rotation,
-      subspecialty,
-      question,
-      answer,
+      service,
+      subspecialty: subspecialty || null,
+      question: question.trim(),
+      answer: answer.trim(),
+      askedById: person.id,
+    },
+    include: {
+      askedBy: true,
     },
   });
 

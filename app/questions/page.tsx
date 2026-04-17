@@ -5,6 +5,8 @@ import { SCHEMA } from "@/lib/schema";
 
 type RotationKey = keyof typeof SCHEMA;
 
+type PersonRole = "RESIDENT" | "ATTENDING" | "OTHER";
+
 type Question = {
   id: number;
   rotation: RotationKey;
@@ -15,6 +17,12 @@ type Question = {
   voteCount: number;
   createdAt: string;
   updatedAt: string;
+  askedById: number | null;
+  askedBy: {
+    id: number;
+    name: string;
+    role: PersonRole;
+  } | null;
 };
 
 export default function QuestionsPage() {
@@ -24,6 +32,7 @@ export default function QuestionsPage() {
   const [questionsByTab, setQuestionsByTab] = useState<Record<RotationKey, Question[]>>({
     Surgery: [],
     Pediatrics: [],
+    Neurology: []
   });
 
   const [showAddForm, setShowAddForm] = useState(false);
@@ -31,16 +40,21 @@ export default function QuestionsPage() {
   const [newSubspecialty, setNewSubspecialty] = useState("");
   const [newQuestion, setNewQuestion] = useState("");
   const [newAnswer, setNewAnswer] = useState("");
+  const [newAskedByName, setNewAskedByName] = useState("");
+  const [newAskedByRole, setNewAskedByRole] = useState<PersonRole | "">("");
   const [isSaving, setIsSaving] = useState(false);
 
   const [sortBy, setSortBy] = useState("most-asked");
   const [serviceFilter, setServiceFilter] = useState("all");
+  const [askedByFilter, setAskedByFilter] = useState("all");
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editService, setEditService] = useState("");
   const [editSubspecialty, setEditSubspecialty] = useState("");
   const [editQuestion, setEditQuestion] = useState("");
   const [editAnswer, setEditAnswer] = useState("");
+  const [editAskedByName, setEditAskedByName] = useState("");
+  const [editAskedByRole, setEditAskedByRole] = useState<PersonRole | "">("");
   const [isEditingSave, setIsEditingSave] = useState(false);
 
   const [editErrors, setEditErrors] = useState({
@@ -51,6 +65,19 @@ export default function QuestionsPage() {
   const serviceOptions = useMemo(() => {
     return SCHEMA[activeTab]?.services ?? [];
   }, [activeTab]);
+
+  const askedByOptions = useMemo(() => {
+    const names = new Set<string>();
+  
+    questionsByTab[activeTab].forEach((q) => {
+      if (q.askedBy?.name) {
+        names.add(q.askedBy.name);
+      }
+    });
+  
+    return Array.from(names).sort();
+  }, [questionsByTab, activeTab]);
+
 
   const addSubspecialtyOptions = useMemo(() => {
     if (newService !== "Other") return [];
@@ -63,43 +90,47 @@ export default function QuestionsPage() {
   }, [activeTab, editService]);
 
   const sortedQuestions = useMemo(() => {
-    const currentQuestions = questionsByTab[activeTab].filter(
-      (q) => serviceFilter === "all" || q.service === serviceFilter
-    );
-
+    const currentQuestions = questionsByTab[activeTab].filter((q) => {
+      const serviceMatch =
+        serviceFilter === "all" || q.service === serviceFilter;
+  
+      const askedByMatch =
+        askedByFilter === "all" || q.askedBy?.name === askedByFilter;
+  
+      return serviceMatch && askedByMatch;
+    });
+  
     switch (sortBy) {
       case "most-asked":
         return [...currentQuestions].sort((a, b) => b.voteCount - a.voteCount);
-
+  
       case "least-asked":
         return [...currentQuestions].sort((a, b) => a.voteCount - b.voteCount);
-
+  
       case "newest":
         return [...currentQuestions].sort(
-          (a, b) =>
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
-
+  
       case "oldest":
         return [...currentQuestions].sort(
-          (a, b) =>
-            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
-
+  
       case "service-asc":
         return [...currentQuestions].sort((a, b) =>
           a.service.localeCompare(b.service)
         );
-
+  
       case "service-desc":
         return [...currentQuestions].sort((a, b) =>
           b.service.localeCompare(a.service)
         );
-
+  
       default:
         return currentQuestions;
     }
-  }, [questionsByTab, activeTab, serviceFilter, sortBy]);
+  }, [questionsByTab, activeTab, serviceFilter, askedByFilter, sortBy]);
 
   function handleStartEdit(q: Question) {
     setEditingId(q.id);
@@ -107,6 +138,8 @@ export default function QuestionsPage() {
     setEditSubspecialty(q.subspecialty ?? "");
     setEditQuestion(q.question);
     setEditAnswer(q.answer);
+    setEditAskedByName(q.askedBy?.name ?? "");
+    setEditAskedByRole(q.askedBy?.role ?? "");
   }
 
   function handleCancelEdit() {
@@ -116,6 +149,8 @@ export default function QuestionsPage() {
     setEditQuestion("");
     setEditAnswer("");
     setEditErrors({ question: false, answer: false });
+    setEditAskedByName("");
+    setEditAskedByRole("");
   }
 
   useEffect(() => {
@@ -143,16 +178,17 @@ export default function QuestionsPage() {
   async function handleDelete(id: number) {
     const confirmed = window.confirm("Are you sure you want to delete this question?");
     if (!confirmed) return;
-
+  
     const res = await fetch(`/api/questions/${id}`, {
       method: "DELETE",
     });
-
+  
     if (!res.ok) {
-      console.error("Failed to delete");
+      const text = await res.text();
+      console.error("Failed to delete:", res.status, text);
       return;
     }
-
+  
     setQuestionsByTab((prev) => ({
       ...prev,
       [activeTab]: prev[activeTab].filter((q) => q.id !== id),
@@ -162,8 +198,10 @@ export default function QuestionsPage() {
   async function handleSaveEdit() {
     const questionEmpty = !editQuestion.trim();
     const answerEmpty = !editAnswer.trim();
-
-    if (questionEmpty || answerEmpty) {
+    const askedByNameEmpty = !editAskedByName.trim();
+    const askedByRoleEmpty = !editAskedByRole;
+    
+    if (questionEmpty || answerEmpty || askedByNameEmpty || askedByRoleEmpty) {
       setEditErrors({
         question: questionEmpty,
         answer: answerEmpty,
@@ -185,6 +223,8 @@ export default function QuestionsPage() {
           subspecialty: editSubspecialty || null,
           question: editQuestion.trim(),
           answer: editAnswer.trim(),
+          askedByName: editAskedByName.trim(),
+          askedByRole: editAskedByRole,
         }),
       });
 
@@ -229,7 +269,13 @@ export default function QuestionsPage() {
   }
 
   async function handleSaveQuestion() {
-    if (!newService || !newQuestion.trim() || !newAnswer.trim()) {
+    if (
+      !newService ||
+      !newQuestion.trim() ||
+      !newAnswer.trim() ||
+      !newAskedByName.trim() ||
+      !newAskedByRole
+    ) {
       return;
     }
 
@@ -247,6 +293,8 @@ export default function QuestionsPage() {
           subspecialty: newSubspecialty || null,
           question: newQuestion.trim(),
           answer: newAnswer.trim(),
+          askedByName: newAskedByName.trim(),
+          askedByRole: newAskedByRole,
         }),
       });
 
@@ -266,6 +314,8 @@ export default function QuestionsPage() {
       setNewSubspecialty("");
       setNewQuestion("");
       setNewAnswer("");
+      setNewAskedByName("");
+      setNewAskedByRole("");
       setShowAddForm(false);
     } finally {
       setIsSaving(false);
@@ -273,7 +323,7 @@ export default function QuestionsPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1200px] px-4 py-8">
+    <main className="mx-auto w-full max-w-screen-2xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white">Pimp Bank</h1>
         <p className="mt-2 text-sm text-zinc-400">
@@ -291,9 +341,14 @@ export default function QuestionsPage() {
               onClick={() => {
                 setActiveTab(tab);
                 setServiceFilter("all");
+                setAskedByFilter("all");
                 setShowAddForm(false);
                 setNewService("");
                 setNewSubspecialty("");
+                setNewQuestion("");
+                setNewAnswer("");
+                setNewAskedByName("");
+                setNewAskedByRole("");
               }}
               className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                 isActive
@@ -323,6 +378,19 @@ export default function QuestionsPage() {
             {serviceOptions.map((service) => (
               <option key={service} value={service}>
                 {service}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={askedByFilter}
+            onChange={(e) => setAskedByFilter(e.target.value)}
+            className="rounded-xl border border-zinc-700 bg-zinc-950 px-4 py-2 text-sm font-medium text-white outline-none hover:bg-zinc-900"
+          >
+            <option value="all">All Askers</option>
+            {askedByOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </select>
@@ -360,6 +428,8 @@ export default function QuestionsPage() {
                 setNewSubspecialty("");
                 setNewQuestion("");
                 setNewAnswer("");
+                setNewAskedByName("");
+                setNewAskedByRole("");
               }}
               className="rounded-lg border border-zinc-700 px-3 py-1 text-sm text-zinc-300 hover:bg-zinc-900"
             >
@@ -412,6 +482,34 @@ export default function QuestionsPage() {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-300">
+                Asked By Name
+              </label>
+              <input
+                value={newAskedByName}
+                onChange={(e) => setNewAskedByName(e.target.value)}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
+                placeholder="Smith (Type in last name only)"
+              />
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-300">
+                Role
+              </label>
+              <select
+                value={newAskedByRole}
+                onChange={(e) => setNewAskedByRole(e.target.value as PersonRole | "")}
+                className="w-full rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-zinc-500"
+              >
+                <option value="">Select role</option>
+                <option value="RESIDENT">Resident</option>
+                <option value="ATTENDING">Attending</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-300">
                 Question
               </label>
               <input
@@ -449,14 +547,15 @@ export default function QuestionsPage() {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-lg">
-        <div className="overflow-x-auto">
-          <table className="w-full table-fixed text-left">
+      <div className="w-full overflow-x-auto">
+        <table className="min-w-[1200px] table-fixed text-left">
             <colgroup>
-              <col className="w-[5%]" />
-              <col className="w-[12%]" />
-              <col className="w-[12%]" />
-              <col className="w-[37%]" />
-              <col className="w-[17%]" />
+              <col className="w-[6%]" />
+              <col className="w-[11%]" />
+              <col className="w-[11%]" />
+              <col className="w-[14%]" />
+              <col className="w-[26%]" />
+              <col className="w-[15%]" />
               <col className="w-[5%]" />
               <col className="w-[12%]" />
             </colgroup>
@@ -466,6 +565,7 @@ export default function QuestionsPage() {
                 <th className="px-2 py-2 text-sm font-semibold text-zinc-200">Created</th>
                 <th className="px-2 py-2 text-sm font-semibold text-zinc-200">Service</th>
                 <th className="px-2 py-2 text-sm font-semibold text-zinc-200">Subspec</th>
+                <th className="px-2 py-2 text-sm font-semibold text-zinc-200">Asked By</th>
                 <th className="px-2 py-2 text-sm font-semibold text-zinc-200">Question</th>
                 <th className="px-2 py-2 text-sm font-semibold text-zinc-200">Answer</th>
                 <th className="px-2 py-2 text-sm font-semibold text-zinc-200">Votes</th>
@@ -479,6 +579,7 @@ export default function QuestionsPage() {
                   key={q.id}
                   className="border-b border-zinc-800 align-top last:border-b-0"
                 >
+                  {/* Created at */}
                   <td className="px-2 py-2 text-sm text-zinc-300">
                     {(() => {
                       const d = new Date(q.createdAt);
@@ -498,7 +599,8 @@ export default function QuestionsPage() {
                           });
                     })()}
                   </td>
-
+                  
+                  {/* Service */}
                   <td className="px-2 py-2 text-sm text-zinc-100">
                     {editingId === q.id ? (
                       <select
@@ -521,27 +623,70 @@ export default function QuestionsPage() {
                     )}
                   </td>
 
+                  {/* SubSpec */}
                   <td className="px-2 py-2 text-sm text-zinc-100">
-                    {editingId === q.id ? (
-                      <select
-                        value={editSubspecialty}
-                        onChange={(e) => setEditSubspecialty(e.target.value)}
-                        className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white outline-none"
-                      >
-                        <option value="">None</option>
-                        {addSubspecialtyOptions.map((subspec) => (
-                          <option key={subspec} value={subspec}>
-                            {subspec}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
+                  {editingId === q.id ? (
+                    <select
+                      value={editSubspecialty}
+                      onChange={(e) => setEditSubspecialty(e.target.value)}
+                      disabled={editService !== "Other"}
+                      className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">
+                        {editService === "Other" ? "Select subspecialty" : "None"}
+                      </option>
+
+                      {editSubspecialtyOptions.map((subspec) => (
+                        <option key={subspec} value={subspec}>
+                          {subspec}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
                       <div className="break-words leading-6">
                       {q.subspecialty ?? (q.rotation === "Surgery" ? "General Surgery" : "—")}
                       </div>
                     )}
-                  </td>
 
+                  </td>
+                    {/* Asked by */}
+                    <td className="px-2 py-2 text-sm text-zinc-100">
+                    {editingId === q.id ? (
+                      <div className="space-y-2">
+                        <input
+                          value={editAskedByName}
+                          onChange={(e) => setEditAskedByName(e.target.value)}
+                          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white outline-none"
+                          placeholder="Smith"
+                        />
+                        <select
+                          value={editAskedByRole}
+                          onChange={(e) => setEditAskedByRole(e.target.value as PersonRole | "")}
+                          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-white outline-none"
+                        >
+                          <option value="">Select role</option>
+                          <option value="RESIDENT">Resident</option>
+                          <option value="ATTENDING">Attending</option>
+                          <option value="OTHER">Other</option>
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="break-words leading-5">
+                        {q.askedBy ? (
+                          <>
+                            <div>{q.askedBy.role === "ATTENDING" || q.askedBy.role === "RESIDENT" ? `Dr. ${q.askedBy.name}` : q.askedBy.name}</div>
+                            <div className="text-xs text-zinc-400">
+                              {q.askedBy.role.charAt(0) + q.askedBy.role.slice(1).toLowerCase()}
+                            </div>
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </div>
+                    )}
+                  </td>
+                  
+                  {/* Question */}
                   <td className="px-2 py-2 text-sm text-zinc-100">
                     {editingId === q.id ? (
                       <div>
@@ -565,12 +710,13 @@ export default function QuestionsPage() {
                         )}
                       </div>
                     ) : (
-                      <div className="whitespace-normal break-words break-all leading-5">
+                      <div className="whitespace-normal break-words break-words leading-5">
                         {q.question}
                       </div>
                     )}
                   </td>
 
+                  {/* Answer */}
                   <td className="px-2 py-2 text-sm text-zinc-300">
                     {editingId === q.id ? (
                       <textarea
@@ -590,7 +736,7 @@ export default function QuestionsPage() {
                       />
                     ) : (
                       <div className="relative group min-h-[60px]">
-                        <div className="whitespace-normal break-words break-all leading-5 text-center blur-sm transition duration-200 group-hover:blur-none">
+                        <div className="whitespace-normal break-words break-words leading-5 text-center blur-sm transition duration-200 group-hover:blur-none">
                           {q.answer}
                         </div>
                         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-zinc-500 group-hover:hidden">
@@ -600,10 +746,12 @@ export default function QuestionsPage() {
                     )}
                   </td>
 
+                  {/* Votes */}
                   <td className="px-2 py-2 text-sm font-semibold text-white">
                     {q.voteCount}
                   </td>
 
+                  {/* Action */}
                   <td className="px-2 py-2">
                     <div className="flex flex-col gap-2">
                       <button
@@ -658,6 +806,9 @@ export default function QuestionsPage() {
   );
 }
 
+// npm run dev
+// npm prisma studi
+
 // Surg: ACS, CRS, Trauma, 
 
 
@@ -708,3 +859,10 @@ export default function QuestionsPage() {
 // Once edit/delete work and validation is decent, it is probably ready for a first private test.
 
 // My honest take: the most important next feature is Edit, then Delete, then Subspecialty filter. After that, you basically have a legit MVP.
+
+
+
+
+// Physician (Resident) specify which one
+ 
+// 

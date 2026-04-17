@@ -3,37 +3,74 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  await prisma.question.createMany({
-    data: [
-      {
-        rotation: "Surgery",
-        service: "ACS",
-        subspecialty: null,
-        question: "What is blood supply and venous drainage to the gallbladder?",
-        answer: "Cystic Artery (off R Hepatic), and none (many tiny vessels)",
+  // Create people first
+  const failla = await prisma.person.upsert({
+    where: {
+      nameRole: {
+        name: "Failla",
+        role: "RESIDENT",
       },
-      {
-        rotation: "Surgery",
-        service: "Other",
-        subspecialty: "Vascular",
-        question: "What is the lethal triad in trauma?",
-        answer: "Hypothermia, acidosis, coagulopathy",
+    },
+    update: {},
+    create: {
+      name: "Failla",
+      role: "RESIDENT",
+    },
+  });
+
+  const lucking = await prisma.person.upsert({
+    where: {
+      nameRole: {
+        name: "Lucking",
+        role: "ATTENDING",
       },
-      {
-        rotation: "Surgery",
-        service: "CRS",
-        subspecialty: null,
-        question: "Why use NG tube post-op SBO?",
-        answer: "Decompress bowel, reduce vomiting, prevent aspiration",
-      },
-      {
-        rotation: "Pediatrics",
-        service: "NICU/PICU",
-        subspecialty: null,
-        question: "What are the components of APGAR score?",
-        answer: "Appearance, Pulse, Grimace, Activity, Respiration",
-      },
-    ],
+    },
+    update: {},
+    create: {
+      name: "Lucking",
+      role: "ATTENDING",
+    },
+  });
+
+  // Now create questions
+
+  // 1. ACS → Resident Dr. Failla
+  await prisma.question.create({
+    data: {
+      rotation: "Surgery",
+      service: "ACS",
+      subspecialty: null,
+      question:
+        "What is blood supply and venous drainage to the gallbladder?",
+      answer:
+        "Cystic Artery (off R Hepatic), and none (many tiny vessels)",
+      askedById: failla.id,
+    },
+  });
+
+  // 2. Vascular → no one
+  await prisma.question.create({
+    data: {
+      rotation: "Surgery",
+      service: "Other",
+      subspecialty: "Vascular",
+      question: "What is the lethal triad in trauma?",
+      answer: "Hypothermia, acidosis, coagulopathy",
+      // no askedById → null
+    },
+  });
+
+  // 3. CRS → Attending Dr. Lucking
+  await prisma.question.create({
+    data: {
+      rotation: "Surgery",
+      service: "CRS",
+      subspecialty: null,
+      question: "Why use NG tube post-op SBO?",
+      answer:
+        "Decompress bowel, reduce vomiting, prevent aspiration",
+      askedById: lucking.id,
+    },
   });
 
   console.log("🌱 Seeded database");

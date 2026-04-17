@@ -34,4 +34,9 @@ export const SCHEMA = {
       ],
       subspecialty: [], // probably none for now
     },
+
+    "Neurology": {
+      services: [],
+      subspecialty: [], // probably none for now
+    },
   };

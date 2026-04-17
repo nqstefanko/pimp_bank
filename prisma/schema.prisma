@@ -7,14 +7,35 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Person {
+  id         Int         @id @default(autoincrement())
+  name       String
+  role       PersonRole
+  questions  Question[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@unique(name: "nameRole", [name, role])
+}
+
 model Question {
-  id           Int      @id @default(autoincrement())
+  id           Int        @id @default(autoincrement())
   rotation     String
   service      String
   subspecialty String?
   question     String
   answer       String
-  voteCount    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  voteCount    Int        @default(0)
+
+  askedById    Int?
+  askedBy      Person?    @relation(fields: [askedById], references: [id])
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+enum PersonRole {
+  RESIDENT
+  ATTENDING
+  OTHER
 }
