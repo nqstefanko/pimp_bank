@@ -32,7 +32,11 @@ export default function QuestionsPage() {
   const [questionsByTab, setQuestionsByTab] = useState<Record<RotationKey, Question[]>>({
     Surgery: [],
     Pediatrics: [],
-    Neurology: []
+    Neurology: [],
+    Psychiatry: [],
+    Family: [],
+    "Interal Medicine": [],
+    "OB/GYN": [],
   });
 
   const [showAddForm, setShowAddForm] = useState(false);
